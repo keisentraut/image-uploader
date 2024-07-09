@@ -13,7 +13,7 @@ INDEX_HTML="""
 <head>
     <title>CAPTION (NUMBERIMAGES images)</title>
     <meta http-equiv="Content-type" content="text/html;charset=UTF-8">
-    <script src="img.js"></script>
+    <script src="img.js" defer></script>
     <link rel="stylesheet" href="img.css">
 </head>
 <body>
@@ -73,26 +73,24 @@ handleGesture()
 """
 
 IMG_CSS="""
-.thumb {
-    margin:10px;
-}
+.thumb { margin:10px; }
+.fullscreen { position:absolute; top:0px; left:0px; width:100%; height:100%; background:url(REL_IMAGE); background-size:contain; background-repeat:no-repeat; background-position:center; overflow:auto; }"
 """
 
 IMG_HTML="""
 <!DOCTYPE html>
 <html>
-    <title>TITLE</title>
-    <meta http-equiv="Content-type" content="text/html;charset=UTF-8">
-    <script src="REL_IMGJS"></script>
-<head>
-</head>
+    <head>
+        <title>TITLE</title>
+        <meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+        <link rel="stylesheet" href="REL_IMGCSS">
+        <script src="REL_IMGJS" defer></script>
+    </head>
 <body>
 <a href="REL_BEFORE" id="before"></a>
 <a href="REL_AFTER"  id="after"></a>
-</datalist>
 <h1>TITLE</h1>
-<div style="position:absolute; top:0px; left:0px; width:100%; height:100%; background:url(REL_IMAGE); background-size:contain; background-repeat:no-repeat; background-position:center; overflow:auto;">
-</div>
+<div class="fullscreen" id="fullscreen"></div>
 </body></html>
 """
 
@@ -115,10 +113,11 @@ def get_names(indir, outdir, infile):
     localfile_image   = outdir / (outname + ".jpg")
     localfile_thumb = outdir / (outname + "_thumb.jpg")
     localfile_html = outdir / (outname + ".html")
+    localfile_css = outdir / (outname + ".css")
     if localfile_html.parent not in makedir_cache:
         os.makedirs(localfile_html.parent, exist_ok=True)
         makedir_cache.add(localfile_html.parent)
-    return rel, outname, localfile_image, localfile_thumb, localfile_html 
+    return rel, outname, localfile_image, localfile_thumb, localfile_html, localfile_css
 
 def create_thumbnail(original_image, localfile_image, localfile_thumb):
     i = PIL.Image.open(original_image)
@@ -143,14 +142,16 @@ def create_thumbnail(original_image, localfile_image, localfile_thumb):
     assert(not localfile_image.exists())
     i.save(localfile_image, quality = 75)
 
-def create_img_html(localfile_html, title, rel_image, rel_before, rel_after, rel_imgjs):
-    #print(f"create_img_html({localfile_html=}, {title=}, {rel_image=}, {rel_before=}, {rel_after=}, {rel_imgjs=})")
+def create_img_html(localfile_html, localfile_css, title, rel_image, rel_before, rel_after, rel_imgjs, rel_imgcss):
     with open(localfile_html, "w") as f:
         f.write(IMG_HTML.replace("TITLE", title)
                         .replace("REL_IMAGE", rel_image)
                         .replace("REL_BEFORE", rel_before)
                         .replace("REL_AFTER", rel_after)
+                        .replace("REL_IMGCSS", rel_imgcss)
                         .replace("REL_IMGJS", rel_imgjs))
+    with open(localfile_css, "w") as f:
+        f.write(IMG_CSS.replace("REL_IMAGE", rel_image))
 
 def create(indir, outdir):
     files = [i for i in indir.rglob('*') if i.is_file() and i.name]
@@ -166,7 +167,7 @@ def create(indir, outdir):
     with open(localfile_index_html, "w") as f:
         fileindexes = ""
         for infile in files:
-            rel, outname, localfile_image, localfile_thumb, localfile_html = get_names(indir,outdir,infile)
+            rel, outname, localfile_image, localfile_thumb, localfile_html, localfile_css = get_names(indir,outdir,infile)
             rel_thumb = os.path.relpath(localfile_thumb, start=outdir)
             rel_html  = os.path.relpath(localfile_html,  start=outdir)
             fileindexes += f'<a href="{rel_html}"><img src="{rel_thumb}" alt="{outname}" class="thumb"/></a>'
@@ -185,14 +186,10 @@ def create(indir, outdir):
     localfile_img_js = outdir / "img.js"
     with open(localfile_img_js, "w") as f:
         f.write(IMG_JS)
-    # img.css
-    localfile_img_css = outdir / "img.css"
-    with open(localfile_img_css, "w") as f:
-        f.write(IMG_CSS)
 
     for index in range(len(files)):
         infile = files[index]
-        rel, outname, localfile_image, localfile_thumb, localfile_html = get_names(indir,outdir,infile)
+        rel, outname, localfile_image, localfile_thumb, localfile_html, localfile_css = get_names(indir,outdir,infile)
         sys.stdout.write(f"{outname} ... ")
         sys.stdout.flush()
         create_thumbnail(infile, localfile_image, localfile_thumb)
@@ -202,7 +199,8 @@ def create(indir, outdir):
         rel_after  = os.path.relpath(after,  start=localfile_html.parent)
         rel_image  = os.path.relpath(localfile_image, start=localfile_html.parent)
         rel_imgjs  = os.path.relpath(outdir / "img.js", start=localfile_html.parent)
-        create_img_html(localfile_html, outname, str(rel_image), str(rel_before), str(rel_after), str(rel_imgjs))
+        rel_imgcss = os.path.relpath(localfile_css, start=localfile_html.parent)
+        create_img_html(localfile_html, localfile_css, outname, str(rel_image), str(rel_before), str(rel_after), str(rel_imgjs), str(rel_imgcss))
     sys.stdout.write("done.\n")
 
 if __name__ == "__main__":
